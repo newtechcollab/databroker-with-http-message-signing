@@ -39,13 +39,32 @@ public class DataBrokerController {
 			mqttClient = new MqttClient(broker, clientId, persistence);
 			MqttConnectOptions connOpts = new MqttConnectOptions();
 	        connOpts.setCleanSession(true);
-	        
-			System.out.println("Connecting to MQTT Broker: " + broker);
-	        mqttClient.connect(connOpts);
-	        System.out.println("Connected to MQTT Broker !!");
-		} catch (MqttException e) {
+	        int retryCount = 0;
+	        int maxRetries = 5;
+	        long retryDelay = 1000; // 1 second
+			while (!mqttClient.isConnected() && retryCount < maxRetries) {
+				System.out.println("Connecting to MQTT Broker: " + broker + " (Attempt " + (retryCount + 1) + ")");
+				try {
+					mqttClient.connect(connOpts);
+					System.out.println("Connected to MQTT Broker !!");
+					break;
+				} catch (MqttException e) {
+					System.out.println("Error while connecting to MQTT Broker -> " + e.getMessage());
+					e.printStackTrace();
+					retryCount++;
+					if (retryCount < maxRetries) {
+						Thread.sleep(retryDelay);
+						retryDelay *= 2; // Exponential backoff
+					}
+				}
+			}
+			if (retryCount >= maxRetries) {
+				throw new RuntimeException("Failed to connect to MQTT broker after multiple retries.");
+			}
+		} catch (MqttException | InterruptedException e) {
 			System.out.println("Error while connecting to MQTT Broker -> " + e.getMessage());
 			e.printStackTrace();
+			throw new RuntimeException("Failed to connect to MQTT broker.", e);
 		}
 	}
 	
